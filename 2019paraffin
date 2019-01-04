@@ -1,0 +1,159 @@
+#include <Timemini.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS 19
+#define TEMPERATURE_PRECISION 10
+OneWire oneWire(ONE_WIRE_BUS); DallasTemperature sensors(&oneWire);
+
+//                  0 1 2 3 4 5 6 7  8  9 10 11 12 13 
+const int rnP[] = { 2,3,4,5,6,7,8,9,10,11,12,13,14,15 }; int rnPN = sizeof rnP / sizeof rnP[0];
+const int snP[] = {16,17,18 }; int snPN = sizeof snP / sizeof snP[0];// select1,2,3
+const int cmP = rnP[0]; const int xlP = rnP[1]; const int fxP = rnP[2];  const int etP = rnP[3];  const int wtP = rnP[4];  const int acP = rnP[5]; const int otP = rnP[6]; const int f2P = rnP[7];
+const int wHP = rnP[8]; const int aHP = rnP[9]; const int mVP = rnP[10]; const int sVP = rnP[11]; const int fnP = rnP[12]; const int wRP = rnP[13];
+const int sP1 = snP[0]; const int sP2 = snP[1]; const int sP3 = snP[2];
+const int tsP[] = { 3,4,5,6,7,9,15 };
+
+
+
+long vTm = 5000; long otC = 3000;
+//                    0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+//                          cmP xlP fxP etP wtP acP otP f2P                     wRP
+const int voP[] = { 100,100,100, 80,100,100,100,100,100,100,100,100,100,100,100,50 };
+DeviceAddress senAir = { 0x28, 0xEE, 0x7F, 0x04, 0x22, 0x15, 0x00, 0xE0 }; DeviceAddress senWax = { 0x28, 0xEE, 0x2F, 0x23, 0x23, 0x15, 0x00, 0x28 };//low,
+ // DeviceAddress senAir= { 0x28, 0xEE, 0x71, 0x23, 0x22, 0x15, 0x00, 0xB4 }; DeviceAddress senWax= { 0x28, 0xEE, 0xC2, 0x0B, 0x22, 0x15, 0x00, 0xD9 };//high
+ //DeviceAddress senAir={0x28,0xEE,0xAA,0x13,0x21,0x15,0x00,0x36}; DeviceAddress senWax={0x28,0xEE,0xBC,0x0E,0x22,0x15,0x00,0x97};//6,9,west,
+ //DeviceAddress senAir={0x28,0xEE,0x47,0x30,0x20,0x15,0x00,0x53}; DeviceAddress senWax={0x28,0xEE,0x00,0x0C,0x22,0x15,0x00,0xFE};//02 middle
+
+int S = 16;//   0   1   2   3    4    5   6   7   8   9   10  11  12  13  14  15   16   17   18  19  20  21
+int poA[] = { fxP,fxP,fxP,wHP, wtP, etP,etP,etP,etP,etP,etP,etP, xlP,xlP,xlP,xlP, wHP, aHP, wRP,wRP,wRP,wRP };
+ int poB[] = { wtP,wtP,wtP,etP, acP, wtP,wtP,wtP,wtP,wtP,wtP,wtP, etP,etP,etP,etP, etP, etP, xlP,xlP,xlP,xlP };
+ int poV[] = { -10,-10,-10,100, 100,  70, 85,-90, 95,100,100,100, 100,-10,100,100, 100, 100, 100,100,100,100 };
+ long poT[]= { h01,h05,m30,m55, h01, h01,h01,h01,h01,h01,h01,h01, m05,h01,h01,m05, m55, m30, h01,h01,h01,h01 };
+ int poN = sizeof poV / sizeof poV[0];
+
+long tmS, tms, tmN; int I, x;
+
+void setup() {
+	sensors.begin(); sensors.setResolution(senAir, TEMPERATURE_PRECISION); sensors.setResolution(senWax, TEMPERATURE_PRECISION);
+	for (x = 0; x<rnPN; x++) { pinMode(rnP[x], OUTPUT); }
+	for (x = 0; x<snPN; x++) { pinMode(snP[x], INPUT); digitalWrite(snP[x], HIGH); }
+	if (digitalRead(sP1) == LOW && digitalRead(sP2) == LOW && digitalRead(sP3) == LOW)endIt();
+                    	else if (digitalRead(sP1) == LOW && digitalRead(sP3) == LOW) { volT(s05); endIt(); }
+                    	else if (digitalRead(sP2) == LOW && digitalRead(sP3) == LOW) { volT(s10); endIt(); }
+                    	else if (digitalRead(sP1) == LOW && digitalRead(sP2) == LOW) { heating(hr01, 70); gout(s10); addP(s30); endIt(); } 
+                                                   	else if (digitalRead(sP3) == LOW) {washW(2); endIt();}
+                                                	else if (digitalRead(sP1) == LOW) {washX(4); endIt();}
+                                                	else if (digitalRead(sP2) == LOW) {textT(); endIt();}
+													else delay(s05);
+				                               
+	for (I =S; I<poN; I++) {
+		if (poV[I]<0)continue; tmS = tms = millis(); tmN = tmS + poT[I]; while (millis()<tmN) {
+			if (millis() - tmS>m02)vibr(s20);
+		 		 if (poA[I] == xlP)runXl(I, tmS);
+			else if (poA[I] == wHP)heatingW();
+			else if (poA[I] == aHP)heating();
+			else if (poA[I] == wRP)runWx(I, tmS);
+				              else runTw(I, tmS);
+		}
+	}gout(s10);
+}
+void loop() { endIt(); }
+
+void runTw(int i, long tst) {
+	int vly = 100 - poV[i]; if (vly<0)vly = 0; long xtm = poV[i] * vTm / voP[poA[i]]; long ytm = vly * vTm / voP[poB[i]];  long otm = xtm + ytm +otC;
+	     if (millis() - tst>ytm + xtm + otm*2 + 500){ digitalWrite(poA[i], LOW); digitalWrite(poB[i], LOW); comE(); mixE(); splE();	 }
+	else if (millis() - tst>ytm + xtm + otm*2   )   { comE();   splE(); }
+	else if (millis() - tst>ytm + xtm + otm)        { goE();    comB();	}
+	else if (millis() - tst>ytm + xtm)              { digitalWrite(poA[i], LOW); digitalWrite(poB[i], LOW); goB(); splB();}
+	else if (millis() - tst>ytm)                    { digitalWrite(poB[i], LOW); digitalWrite(poA[i], HIGH);  mixB();}
+	else                                            { digitalWrite(poB[i], HIGH); mixB(); }
+}
+
+void runXl(int i, long tst) {
+	int vly = 100 - poV[i]; if (vly<0)vly = 0; long xtm = poV[i] * vTm/voP[xlP]; long ytm = vly* vTm / voP[etP]; long yyt = ytm + otC; long otm = xtm + ytm + otC;
+	if (millis() - tst>ytm + otm + yyt + xtm + 500){ digitalWrite(xlP, LOW); digitalWrite(etP, LOW); splE();	}
+	else if (millis() - tst>ytm + otm + yyt + xtm) { digitalWrite(xlP, LOW); }
+	else if (millis() - tst>ytm + otm + yyt)       { digitalWrite(xlP, HIGH); goE(); comE(); mixE();	}
+	else if (millis() - tst>ytm + otm)             { goE(); comB(); mixB();	}
+	else if (millis() - tst>ytm)                   { digitalWrite(etP, LOW); goB(); splB();	}
+	else                                           { digitalWrite(etP, HIGH); }
+}
+
+void runWx(int i, long tst) {
+	heating();
+	int voly = 100 - poV[i]; if (voly<0)voly = 0; long xtm = poV[i] * vTm / voP[wRP]; long ytm = voly* vTm / voP[xlP]; long otm = xtm + ytm + otC;
+	if (millis() - tst>otm + xtm + ytm + 500) { digitalWrite(xlP, LOW); digitalWrite(wRP, LOW); splE();	}
+	else if (millis() - tst>otm + xtm + ytm)  { digitalWrite(xlP, LOW); digitalWrite(wRP, LOW); }
+	else if (millis() - tst>otm + xtm)        { digitalWrite(wRP, LOW); digitalWrite(xlP, HIGH); goE();	}
+	else if (millis() - tst>otm)              { digitalWrite(wRP, HIGH); goE();	}
+	else goB(); splB();
+}
+
+void heating(long htt, float cTp) {
+	long hTimes = millis(); while (millis()<hTimes + htt) { setTA(cTp, 0.1); setTW(cTp, 0.1); }
+}
+
+void heating() { setTA(70, 0.1); setTW(68, 0.1); }
+void heatingW() { setTW(68, 0.1); }
+
+void setTW(float sett, float setv) {
+	sensors.requestTemperatures(); float sensingWax = sensors.getTempC(senWax);  if (sensingWax>sett + setv) digitalWrite(wHP, LOW);
+	else if (sensingWax<sett - setv) digitalWrite(wHP, HIGH);
+}
+void setTA(float sett, float setv) {
+	sensors.requestTemperatures(); float sensingair = sensors.getTempC(senAir);  if (sensingair>sett + setv)digitalWrite(aHP, LOW);
+	else if (sensingair<sett - setv) { digitalWrite(aHP, HIGH); digitalWrite(fnP, HIGH); }
+}
+void washW(int n) {
+	heating(hr01, 70);
+	for (int i = 0; i < n; i++) { gout(s15); addW(s08); int tWh = 70 - 10 * i; heating(mn15, tWh); }
+	textT();
+}
+void washX(int n) {
+	heating(hr01, 70); for (int i = 0; i < n; i++) {
+		gout(s15);
+		switch (i) {case 1:addX(s08); break;case 2:addE(s08); break;default:addW(s08);}
+		int tWh = 70 - 10 * i; heating(mn15, tWh);} 
+	textT();}
+void textT() { gout(s10); delay(s03); addW(s08); gout(s02); }
+
+void addW(long vol) {
+	digitalWrite(wtP, HIGH); delay(vol); digitalWrite(wtP, LOW);
+	digitalWrite(cmP, HIGH); digitalWrite(mVP, HIGH); delay(vol + s05); digitalWrite(cmP, LOW); digitalWrite(mVP, LOW);
+}
+void addE(long vol) {
+	digitalWrite(etP, HIGH); delay(vol); digitalWrite(etP, LOW);
+	digitalWrite(cmP, HIGH); digitalWrite(mVP, HIGH); delay(vol + s05); digitalWrite(cmP, LOW); digitalWrite(mVP, LOW);
+}
+void addX(long vol) { digitalWrite(xlP, HIGH); delay(vol); digitalWrite(xlP, LOW); }
+void addP(long vol) { digitalWrite(wRP, HIGH); delay(vol); digitalWrite(wRP, LOW); }
+
+void mixB() { digitalWrite(mVP, HIGH);}
+void mixE() { digitalWrite(mVP, LOW); }
+void splB() { digitalWrite(sVP, HIGH); }
+void splE() { digitalWrite(sVP, LOW); }
+void comB() { digitalWrite(cmP, HIGH); }
+void comE() { digitalWrite(cmP, LOW); }
+void goB()  { digitalWrite(otP, HIGH); }
+void goE()  { digitalWrite(otP, LOW); }
+
+void gout(long vol) {
+	digitalWrite(otP, HIGH); digitalWrite(sVP, HIGH); delay(vol);
+	digitalWrite(otP, LOW); digitalWrite(sVP, LOW);
+}
+
+void vibr(long t) {
+	if (millis() - tms<m03)digitalWrite(sVP, LOW); else if (millis() - tms<m03 + t)digitalWrite(sVP, HIGH);
+	else if (millis() - tms<m05)digitalWrite(sVP, LOW); else tms = millis();
+}
+
+void endIt() { for (x = 0; x<rnPN; x++) digitalWrite(rnP[x], LOW); delay(hr30); }
+
+void volT(long vol) {
+	comB(); delay(vol + s02); comE(); goB(); delay(vol + s05); goE();
+	for (int n = 1; n < 6; n++) {
+		digitalWrite(tsP[n], HIGH); delay(vol); digitalWrite(tsP[n], LOW); delay(s10); comB(); delay(vol + s03); comE(); goB(); delay(vol + s05); goE();
+	}
+	digitalWrite(tsP[0], HIGH); delay(vol); digitalWrite(tsP[0], LOW); delay(s10); goB(); delay(vol + s05); goE();
+}
+
