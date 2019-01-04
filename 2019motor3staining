@@ -1,0 +1,96 @@
+#include <Timemini.h>
+const int nX = 17; const int nZ = 50;//nX=67
+const int nY = 50;        //nY=64//int nY=16;
+
+int  poI[] = {  6,  7,   8, 12,  13, 14,  15,  24, 25, 26, 27, 28, 29,  16,  17,  18, 19, 20,  9, 10, 23, 30, 31, 32, 33, 34, 35 };
+long poT[] = {m10,m05, m10,m05, m03,m02, m05, m05,m05,m05,m05,m05,m02, m05, m02, m01,m01,m05,m05,m05, };
+//            xlT      edT      90       h1T  w1T                      epT  o1T  e1T
+// int poI[]={  0,  1,   2,  3,   4,  5,   6,   7,  8,  9, 10, 11, 12,  13,  14,  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35};
+
+int xPo[] = { 0, 18, 36, 54, 72, 90 };
+int yPo[] = { 0, 36, 85,121,170,206 };//72+13, 108+13,144+26,180+26
+int zPo[] = { 45,20 };
+//                  0   1  2  3  4  5  6  7  8   9
+const int rnP[] = { 2,  3, 4, 5, 6, 7, 8, 9, 10,11 }; //2n, dir 2n+1 step, 8, enable
+const int snP[] = { 12,18,14,15,16,17 };//2n A, 2n+1 B 012xyz
+const int unP = rnP[9];
+
+int xMotor = 1; int yMotor = 0; int zMotor = 2;
+long tmS, tm;
+long nowPx, nowPy, nowPz;
+int poN = sizeof poT / sizeof poT[0];
+
+void setup() {
+	for (int x = 0; x<10; x++)pinMode(rnP[x], OUTPUT);
+	for (int x = 0; x< 6; x++)pinMode(snP[x], INPUT);
+	for (int x = 0; x< 3; x++)digitalWrite(rnP[x * 3 + 2], HIGH);
+	delay(1000); moveZero(); delay(1000);
+
+	for (int I = 0; I<poN; I++) { moveX(poI[I]); 
+	delay(poT[I]);
+	delay(500);
+	}
+}
+void loop() { delay(1000); }
+
+void moveZero() {
+	moveZa(); delay(100);
+	moveA(yMotor); moveA(xMotor);
+	nowPx = 0; nowPy = 0;
+}
+
+void moveX(int x) { int xx = x % 6; int yy = x / 6; moveXY(xPo[xx], yPo[yy]); }
+
+void moveXY(int a, int b) {
+	long xDis = a*nX; long yDis = b*nY;
+	moveZa();
+	long distanceX = xDis - nowPx;
+	if (distanceX >= 0) { digitalWrite(rnP[xMotor * 3], LOW); }
+	else { digitalWrite(rnP[xMotor * 3], HIGH); distanceX = -distanceX; }
+	digitalWrite(rnP[xMotor * 3 + 2], LOW); runDis(rnP[xMotor * 3 + 1], distanceX); digitalWrite(rnP[xMotor * 3 + 2], HIGH);
+	nowPx = xDis;
+	long distanceY = yDis - nowPy;
+	if (distanceY >= 0) { digitalWrite(rnP[yMotor * 3], LOW); }
+	else { digitalWrite(rnP[yMotor * 3], HIGH); distanceY = -distanceY; }
+	digitalWrite(rnP[yMotor * 3 + 2], LOW); runDis(rnP[yMotor * 3 + 1], distanceY); digitalWrite(rnP[yMotor * 3 + 2], HIGH);
+	nowPy = yDis;
+	moveZ(zPo[0]);
+}
+
+void moveZ(long x) {
+	long zDis = x*nZ; long distanceZ = zDis - nowPz;
+	if (distanceZ >= 0) { digitalWrite(rnP[zMotor * 3], LOW); }
+	               else { digitalWrite(rnP[zMotor * 3], HIGH); distanceZ = -distanceZ; }
+	digitalWrite(rnP[zMotor * 3 + 2], LOW);  digitalWrite(unP, HIGH);  //unlock
+	runDis(rnP[zMotor * 3 + 1], distanceZ);
+	digitalWrite(rnP[zMotor * 3 + 2], HIGH); digitalWrite(unP, LOW);  //lock
+	nowPz = zDis;
+}
+
+void moveZa() {
+	digitalWrite(unP, HIGH);  //unlock
+	moveA(zMotor);//Z = 2
+	digitalWrite(unP, LOW);  //lock
+	nowPz = 0;
+}
+
+void moveA(int x) {
+	digitalWrite(rnP[x * 3], HIGH);  //dir
+	digitalWrite(rnP[x * 3 + 2], LOW);  //en
+	while (digitalRead(snP[x * 2]) == LOW)run(rnP[x * 3 + 1]);
+	digitalWrite(rnP[x * 3 + 2], HIGH);  //dis
+}
+
+void runDis(int x, long distance) {
+	while (distance>0) { run(x); distance--; }
+}
+void run(int x) {
+	digitalWrite(x, HIGH);
+	delayMicroseconds(100);
+	digitalWrite(x, LOW);
+	delayMicroseconds(1500);
+}
+
+
+
+
